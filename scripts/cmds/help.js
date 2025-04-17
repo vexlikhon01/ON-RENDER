@@ -1,121 +1,66 @@
-fs = require("fs-extra");
-const axios = require("axios");
-const path = require("path");
-const { getPrefix } = global.utils;
-const { commands, aliases } = global.GoatBot;
-const doNotDelete = "[ 𝗔  𝗬 𝗔 𝗡 ]"; 
+const fs = require("fs");
 
 module.exports = {
   config: {
     name: "help",
-    version: "1.17",
-    author: "ArYan",
-    countDown: 5,
+    version: "2.0",
+    author: " Eren",
     role: 0,
-    shortDescription: {
-      en: "View command usage and list all commands directly",
-    },
-    longDescription: {
-      en: "View command usage and list all commands directly",
-    },
-    category: "info",
-    guide: {
-      en: "{pn} / help cmdName ",
-    },
-    priority: 1,
+    shortDescription: "See available commands",
+    longDescription: "Show all available commands or command details",
+    guide: "{pn} [page | command name]"
   },
 
-  onStart: async function ({ message, args, event, threadsData, role }) {
-    const { threadID } = event;
-    const threadData = await threadsData.get(threadID);
-    const prefix = getPrefix(threadID);
+  onStart: async function ({ args, message }) {
+    const commands = Array.from(global.GoatBot.commands.values());
+    const prefix = ".";
+    const perPage = 15;
+    const totalPages = Math.ceil(commands.length / perPage);
+    const roleMap = ["User", "Group Admin", "Bot Admin", "Owner Only"];
 
-    if (args.length === 0) {
-      const categories = {};
-      let msg = "╭───────❁";
+    if (args[0] && isNaN(args[0])) {
+      const name = args[0].toLowerCase();
+      const cmd =
+        global.GoatBot.commands.get(name) ||
+        commands.find(c => c.config.aliases?.includes(name));
+      if (!cmd) return message.reply(`❌ Command '${name}' not found.`);
 
-      msg += `\n│𝗔𝗬𝗔𝗡 𝗛𝗘𝗟𝗣 𝗟𝗜𝗦𝗧\n╰────────────❁`; 
+      const conf = cmd.config;
+      const aliases = conf.aliases?.join(", ") || "None";
+      const guide = typeof conf.guide === "string" ? conf.guide.replace(/{pn}/g, prefix + conf.name) : "No guide available.";
 
-      for (const [name, value] of commands) {
-        if (value.config.role > 1 && role < value.config.role) continue;
+      return message.reply(
+`══════════════════
+                  DETAILS =
 
-        const category = value.config.category || "Uncategorized";
-        categories[category] = categories[category] || { commands: [] };
-        categories[category].commands.push(name);
-      }
+  • Name: ${conf.name}
+  • Version: ${conf.version || "1.0"}
 
-      Object.keys(categories).forEach((category) => {
-        if (category !== "info") {
-          msg += `\n╭─────✰『  ${category.toUpperCase()}  』`;
+  • Role: ${roleMap[conf.role] || "Unknown"}
+  • Aliases: ${aliases}
 
-
-          const names = categories[category].commands.sort();
-          for (let i = 0; i < names.length; i += 3) {
-            const cmds = names.slice(i, i + 2).map((item) => `⭔${item}`);
-            msg += `\n│${cmds.join(" ".repeat(Math.max(1, 5 - cmds.join("").length)))}`;
-          }
-
-          msg += `\n╰────────────✰`;
-        }
-      });
-
-      const totalCommands = commands.size;
-      msg += `\n\n╭─────✰[𝗘𝗡𝗝𝗢𝗬]\n│>𝗧𝗢𝗧𝗔𝗟 𝗖𝗠𝗗𝗦: [${totalCommands}].\n│𝗧𝗬𝗣𝗘𝖳:[ ${prefix}𝗛𝗘𝗟𝗣 \n│.]\n╰────────────✰`;
-      msg += ``;
-      msg += `\n╭─────✰\n│ ╣[𝗔  𝗬 𝗔 𝗡]╠\n╰────────────✰`; 
-
-const helpListImages = [ "https://i.imgur.com/a3JShJK.jpeg" ];
-
-
-      const helpListImage = helpListImages[Math.floor(Math.random() * helpListImages.length)];
-
-      await message.reply({
-        body: msg,
-        attachment: await global.utils.getStreamFromURL(helpListImage)
-      });
-    } else {
-      const commandName = args[0].toLowerCase();
-      const command = commands.get(commandName) || commands.get(aliases.get(commandName));
-
-      if (!command) {
-        await message.reply(`Command "${commandName}" not found.`);
-      } else {
-        const configCommand = command.config;
-        const roleText = roleTextToString(configCommand.role);
-        const author = configCommand.author || "Unknown";
-
-        const longDescription = configCommand.longDescription ? configCommand.longDescription.en || "No description" : "No description";
-
-        const guideBody = configCommand.guide?.en || "No guide available.";
-        const usage = guideBody.replace(/{p}/g, prefix).replace(/{n}/g, configCommand.name);
-
-        const response = `
-  ╭───⊙
-  │ 🔶 ${configCommand.name}
-  ├── INFO
-  │ 📝 𝗗𝗲𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻: ${longDescription}
-  │ 👑 𝗔𝘂𝘁𝗵𝗼𝗿: ${author}
-  │ ⚙ 𝗚𝘂𝗶𝗱𝗲: ${usage}
-  ├── USAGE
-  │ 🔯 𝗩𝗲𝗿𝘀𝗶𝗼𝗻: ${configCommand.version || "1.0"}
-  │ ♻𝗥𝗼𝗹𝗲: ${roleText}
-  ╰────────────⊙`;
-
-        await message.reply(response);
-      }
+  • Author: ${conf.author || "Unknown"}
+  • Usage: ${guide}
+══════════════════`
+      );
     }
-  },
-};
 
-function roleTextToString(roleText) {
-  switch (roleText) {
-    case 0:
-      return "0 (All users)";
-    case 1:
-      return "1 (Group administrators)";
-    case 2:
-      return "2 (Admin bot)";
-    default:
-      return "Unknown role";
+    const page = parseInt(args[0]) || 1;
+    if (page < 1 || page > totalPages) return message.reply(`❌ Invalid page. Enter 1 - ${totalPages}`);
+
+    const list = commands
+      .slice((page - 1) * perPage, page * perPage)
+      .map(cmd => `  ◦  ${cmd.config.name}`)
+      .join("\n");
+
+    return message.reply(
+`════════════════════
+               𝐂𝐨𝐦𝐦𝐚𝐧𝐝 𝐋𝐢𝐬𝐭 :
+
+${list}
+
+════════════════════ Page ${page}/${totalPages} • Total: ${commands.length} commands
+   Type /help [page | command name] ════════════════════`
+    );
   }
-}
+};
